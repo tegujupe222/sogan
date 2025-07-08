@@ -8,8 +8,9 @@ SOGANは、スマートフォンのカメラで自撮りするだけで、「今
 
 ## 🎯 主な機能
 
-### 🔍 顔相診断
-- **顔パーツ自動検出**: 額・眉・目・鼻・口・顎などを自動で判定（AI使用）
+### 🔍 AI顔相診断
+- **OpenAI GPT-4 Vision API**: 高度なAIによる顔相分析
+- **顔パーツ自動検出**: 額・眉・目・鼻・口・顎などを自動で判定
 - **表情スキャン**: 目の輝き、口角、表情筋の動きから「笑顔度」「怒相度」などを算出
 
 ### 📈 結果表示
@@ -20,9 +21,15 @@ SOGANは、スマートフォンのカメラで自撮りするだけで、「今
 - **顔相履歴**: 毎日の診断結果をカレンダーやグラフで表示
 - **写真比較**: 過去の顔と現在を比較して「相の変化」を可視化
 
-### 💡 改善提案
+### 💡 AI改善提案
+- **AIアドバイス生成**: ダイヤモンドを消費してパーソナライズされたアドバイスを生成
+- **アドバイスカテゴリ**: ライフスタイル、美容、健康、コミュニケーション、エクササイズ、食事、メンタル
 - **ライフスタイルアドバイス**: 食事・姿勢・表情トレーニングの提案
 - **表情筋エクササイズ**: 顔ヨガや笑顔トレーニングのガイド付き
+
+### 💎 ダイヤモンドシステム
+- **AIアドバイス生成**: 1個のダイヤモンドでAIがパーソナライズされたアドバイスを生成
+- **ダイヤモンド獲得**: 診断やログインでダイヤモンドを獲得
 
 ### 🔔 通知機能
 - **朝の顔チェック通知**: ルーティン化をサポート
@@ -36,10 +43,12 @@ SOGANは、スマートフォンのカメラで自撮りするだけで、「今
 |------|------------------|
 | UI | SwiftUI |
 | 顔検出 | Vision Framework（Apple） |
-| 機械学習 | CoreML（表情判定モデル） |
+| AI分析 | OpenAI GPT-4 Vision API |
 | 画像処理 | Metal / Core Image |
 | データ管理 | UserDefaults |
 | 顔履歴保存 | ローカル保存 |
+| バックエンド | Vercel Functions |
+| API | OpenAI API |
 
 ## 🔑 差別化ポイント
 
@@ -68,6 +77,8 @@ SOGANは、スマートフォンのカメラで自撮りするだけで、「今
 - Xcode 15.0以上
 - iOS 15.0以上
 - macOS 13.0以上
+- Node.js 18.0以上（バックエンド用）
+- OpenAI APIキー
 
 ### インストール手順
 
@@ -77,16 +88,35 @@ SOGANは、スマートフォンのカメラで自撮りするだけで、「今
    cd SOGAN
    ```
 
-2. **Xcodeでプロジェクトを開く**
+2. **バックエンドのセットアップ**
+   ```bash
+   # 依存関係をインストール
+   npm install
+   
+   # 環境変数を設定
+   cp env.example .env.local
+   # .env.localファイルを編集してOpenAI APIキーを設定
+   ```
+
+3. **Vercelにデプロイ**
+   ```bash
+   # Vercel CLIをインストール（初回のみ）
+   npm install -g vercel
+   
+   # プロジェクトをデプロイ
+   vercel --prod
+   ```
+
+4. **iOSアプリの設定**
    ```bash
    open SOGAN.xcodeproj
    ```
-
-3. **ビルド設定の確認**
+   
    - プロジェクト設定で「Bundle Identifier」を設定
    - 「Signing & Capabilities」で適切な開発チームを選択
+   - `NetworkManager.swift`の`baseURL`をVercelのデプロイURLに更新
 
-4. **シミュレーターまたは実機で実行**
+5. **シミュレーターまたは実機で実行**
    - iOS Simulatorでテストする場合: `Cmd + R`
    - 実機でテストする場合: デバイスを接続して実行
 
@@ -103,11 +133,12 @@ SOGANは、スマートフォンのカメラで自撮りするだけで、「今
 
 ```
 SOGAN/
-├── SOGAN/
+├── SOGAN/                      # iOSアプリ
 │   ├── SOGANApp.swift          # アプリのエントリーポイント
 │   ├── ContentView.swift       # メインのタブビュー
 │   ├── Models.swift            # データモデル
 │   ├── DataManager.swift       # データ管理クラス
+│   ├── NetworkManager.swift    # API通信管理
 │   ├── DiagnosisView.swift     # 診断画面
 │   ├── CameraView.swift        # カメラ機能
 │   ├── ImagePicker.swift       # 画像選択機能
@@ -117,8 +148,15 @@ SOGAN/
 │   ├── SettingsView.swift      # 設定画面
 │   ├── Info.plist              # アプリ設定
 │   └── Assets.xcassets/        # アセット
+├── api/                        # Vercel Functions
+│   ├── face-reading.ts         # 顔相診断API
+│   ├── advice.ts               # AIアドバイス生成API
+│   └── diamonds.ts             # ダイヤモンド管理API
 ├── SOGANTests/                 # ユニットテスト
 ├── SOGANUITests/               # UIテスト
+├── package.json                # Node.js依存関係
+├── vercel.json                 # Vercel設定
+├── env.example                 # 環境変数例
 └── README.md                   # このファイル
 ```
 
@@ -149,6 +187,7 @@ xcodebuild test -project SOGAN.xcodeproj -scheme SOGANUITests -destination 'plat
 
 4. **改善に取り組む**
    - 「アドバイス」タブで表情筋エクササイズやライフスタイル改善の提案を確認
+   - ダイヤモンドを消費してAIが生成するパーソナライズされたアドバイスを取得
 
 ## 🤝 コントリビューション
 

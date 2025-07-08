@@ -10,6 +10,7 @@ import AVFoundation
 
 struct DiagnosisView: View {
     @StateObject private var dataManager = DataManager.shared
+    @StateObject private var faceReadingService = FaceReadingService()
     @State private var showingImagePicker = false
     @State private var showingCamera = false
     @State private var selectedImage: UIImage?
@@ -18,7 +19,6 @@ struct DiagnosisView: View {
     @State private var diagnosisResult: FaceReadingResult?
     @State private var animateGradient = false
     @State private var showingUserManagement = false
-    @State private var showingPurchase = false
     
     var body: some View {
         NavigationView {
@@ -39,7 +39,7 @@ struct DiagnosisView: View {
                         // ヘッダー
                         VStack(spacing: 15) {
                             // タイトルと課金ボタン
-                            HStack {
+                            HStack(alignment: .top) {
                                 VStack(spacing: 8) {
                                     Text("今日の顔相診断")
                                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -50,6 +50,7 @@ struct DiagnosisView: View {
                                                 endPoint: .trailing
                                             )
                                         )
+                                        .padding(.leading, 4)
                                     
                                     Text("カメラで自撮りして運気をチェック")
                                         .font(.system(size: 16, weight: .medium, design: .rounded))
@@ -57,13 +58,9 @@ struct DiagnosisView: View {
                                 }
                                 
                                 Spacer()
-                                
-                                // 課金ボタン
-                                PremiumButton {
-                                    showingPurchase = true
-                                }
                             }
-                            .padding(.top, 20)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 32)
                             
                             // 装飾的な要素
                             HStack(spacing: 20) {
@@ -118,6 +115,7 @@ struct DiagnosisView: View {
                             }
                         }
                         .padding(.horizontal, 20)
+                        .padding(.top, 10)
                     }
                     .padding(.bottom, 30)
                 }
@@ -143,11 +141,12 @@ struct DiagnosisView: View {
                 DiagnosisResultView(result: result)
             }
         }
+        .onAppear {
+            // 毎日0時にダイヤモンドを補填
+            dataManager.refillDailyDiamonds()
+        }
         .sheet(isPresented: $showingUserManagement) {
             UserManagementView()
-        }
-        .sheet(isPresented: $showingPurchase) {
-            PurchaseView()
         }
         .overlay(
             Group {
@@ -165,20 +164,66 @@ struct DiagnosisView: View {
             return
         }
         
+        // ダイヤモンドチェック
+        let currentDiamonds = dataManager.getDiamonds(for: currentUserId)
+        if currentDiamonds < 3 { // 診断に3ダイヤ必要
+            // ダイヤモンド不足のアラートを表示
+            return
+        }
+        
+        // ダイヤモンドを消費
+        dataManager.consumeDiamonds(3, for: currentUserId)
+        
         isAnalyzing = true
         
-        // 実際のアプリではここでAI分析を行う
-        // 現在はダミーデータを使用
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            let result = FaceReadingResult(
-                userId: currentUserId,
-                imageData: image.jpegData(compressionQuality: 0.8)
-            )
-            diagnosisResult = result
-            dataManager.addHistory(result)
-            isAnalyzing = false
-            showingResult = true
+        // 画像の向き補正とミラー反転を適用
+        let fixedImage = image.fixedOrientationAndMirrorIfFrontCamera()
+        
+        // OpenAI APIを使用した顔相診断を実行
+        Task {
+            await faceReadingService.analyzeFace(image: fixedImage)
+            
+            await MainActor.run {
+                if let analysis = faceReadingService.analysisResult {
+                    // API分析結果をFaceReadingResultに変換
+                    guard let imageData = fixedImage.jpegData(compressionQuality: 0.8) else {
+                        print("Error: Failed to convert image to JPEG data")
+                        isAnalyzing = false
+                        return
+                    }
+                    
+                    // API結果を既存のモデルに変換
+                    let result = convertAPIAnalysisToFaceReadingResult(
+                        analysis: analysis,
+                        userId: currentUserId,
+                        imageData: imageData
+                    )
+                    
+                    diagnosisResult = result
+                    dataManager.addHistory(result)
+                    isAnalyzing = false
+                    showingResult = true
+                } else if let errorMessage = faceReadingService.errorMessage {
+                    print("Error: \(errorMessage)")
+                    isAnalyzing = false
+                    // エラーハンドリング（必要に応じてアラートを表示）
+                }
+            }
         }
+    }
+    
+    // API分析結果を既存のFaceReadingResultモデルに変換
+    private func convertAPIAnalysisToFaceReadingResult(
+        analysis: FaceReadingAnalysis,
+        userId: UUID,
+        imageData: Data
+    ) -> FaceReadingResult {
+        // 新しいイニシャライザを使用してAPI結果からFaceReadingResultを作成
+        return FaceReadingResult(
+            fromAPIAnalysis: analysis,
+            userId: userId,
+            imageData: imageData
+        )
     }
 }
 
@@ -296,9 +341,7 @@ struct TodayResultsCard: View {
                 Text("今日の診断結果")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
-                
                 Spacer()
-                
                 Text("\(results.count)回")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
@@ -307,15 +350,23 @@ struct TodayResultsCard: View {
                     .background(Color.orange)
                     .clipShape(Capsule())
             }
-            
-            if results.count == 1 {
-                // 1回のみの場合は大きなカード
+
+            if results.isEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "calendar.badge.exclamationmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(.orange.opacity(0.6))
+                    Text("本日まだ診断がありません")
+                        .font(.system(size: 16, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                }
+                .padding(40)
+            } else if results.count == 1 {
                 SingleResultCard(result: results[0]) {
                     selectedResult = results[0]
                     showingResult = true
                 }
             } else {
-                // 複数回の場合はリスト表示
                 LazyVStack(spacing: 12) {
                     ForEach(results) { result in
                         ResultListItem(result: result) {
@@ -466,7 +517,10 @@ struct ResultListItem: View {
 struct DiagnosisStartCard: View {
     let onCameraTap: () -> Void
     let onPhotoTap: () -> Void
+    @StateObject private var dataManager = DataManager.shared
     @State private var isAnimating = false
+    @State private var showingDiamondAlert = false
+    @State private var showingDiamondPurchase = false
     
     var body: some View {
         VStack(spacing: 30) {
@@ -512,15 +566,90 @@ struct DiagnosisStartCard: View {
                     .lineLimit(2)
             }
             
+            // ダイヤモンド情報カード
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "diamond.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.blue)
+                    
+                    Text("診断に必要なダイヤモンド")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    if let userId = dataManager.selectedUserId {
+                        HStack(spacing: 4) {
+                            Text("💎")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("\(dataManager.getDiamonds(for: userId))")
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                
+                HStack {
+                    Text("1回の診断で3ダイヤモンドを消費します")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Button("購入") {
+                        showingDiamondPurchase = true
+                    }
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue)
+                    .cornerRadius(12)
+                }
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.blue.opacity(0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    )
+            )
+            .padding(.horizontal, 20)
+            
             // アクションボタン
             VStack(spacing: 16) {
                 // カメラボタン
-                Button(action: onCameraTap) {
+                Button(action: {
+                    if let userId = dataManager.selectedUserId,
+                       dataManager.getDiamonds(for: userId) >= 3 {
+                        onCameraTap()
+                    } else {
+                        showingDiamondAlert = true
+                    }
+                }) {
                     HStack(spacing: 12) {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 18, weight: .semibold))
                         Text("カメラで撮影")
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        
+                        Spacer()
+                        
+                        // ダイヤモンド消費表示
+                        HStack(spacing: 4) {
+                            Text("💎")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("3")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(8)
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -537,12 +666,34 @@ struct DiagnosisStartCard: View {
                 }
                 
                 // 写真選択ボタン
-                Button(action: onPhotoTap) {
+                Button(action: {
+                    if let userId = dataManager.selectedUserId,
+                       dataManager.getDiamonds(for: userId) >= 3 {
+                        onPhotoTap()
+                    } else {
+                        showingDiamondAlert = true
+                    }
+                }) {
                     HStack(spacing: 12) {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 18, weight: .semibold))
                         Text("写真を選択")
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        
+                        Spacer()
+                        
+                        // ダイヤモンド消費表示
+                        HStack(spacing: 4) {
+                            Text("💎")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("3")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(8)
                     }
                     .foregroundColor(.orange)
                     .frame(maxWidth: .infinity)
@@ -559,6 +710,22 @@ struct DiagnosisStartCard: View {
             }
         }
         .padding(30)
+        .padding(.horizontal, 10)
+        .alert("ダイヤモンド不足", isPresented: $showingDiamondAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("ダイヤ購入") {
+                showingDiamondPurchase = true
+            }
+        } message: {
+            if let userId = dataManager.selectedUserId {
+                Text("診断には3ダイヤが必要です。現在のダイヤ: \(dataManager.getDiamonds(for: userId))")
+            } else {
+                Text("診断には3ダイヤが必要です。")
+            }
+        }
+        .sheet(isPresented: $showingDiamondPurchase) {
+            DiamondPurchaseView()
+        }
         .background(
             RoundedRectangle(cornerRadius: 24)
                 .fill(Color(.systemBackground))
@@ -811,52 +978,28 @@ struct AnalyzingView: View {
     }
 }
 
-#Preview {
-    DiagnosisView()
-}
-
-// MARK: - プレミアムボタン
-struct PremiumButton: View {
-    let onTap: () -> Void
-    @State private var isAnimating = false
-    
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 8) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .rotationEffect(.degrees(isAnimating ? 15 : -15))
-                    .animation(
-                        Animation.easeInOut(duration: 1.0)
-                            .repeatForever(autoreverses: true),
-                        value: isAnimating
-                    )
-                
-                Text("プレミアム")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                LinearGradient(
-                    colors: [.orange, .pink],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .clipShape(Capsule())
-            .shadow(color: .orange.opacity(0.3), radius: 8, x: 0, y: 4)
-            .scaleEffect(isAnimating ? 1.05 : 1.0)
-            .animation(
-                Animation.easeInOut(duration: 2.0)
-                    .repeatForever(autoreverses: true),
-                value: isAnimating
-            )
-        }
-        .onAppear {
-            isAnimating = true
+// MARK: - UIImage 拡張（向き補正＋フロントカメラ時ミラー反転）
+extension UIImage {
+    /// 画像の向きを .up に補正し、必要に応じて左右反転（フロントカメラ用）
+    func fixedOrientationAndMirrorIfFrontCamera(isFrontCamera: Bool = true) -> UIImage {
+        // まず向きを補正
+        let fixed = self.fixedOrientation(to: .up)
+        // フロントカメラの場合は左右反転
+        if isFrontCamera {
+            UIGraphicsBeginImageContextWithOptions(fixed.size, false, fixed.scale)
+            let context = UIGraphicsGetCurrentContext()
+            context?.translateBy(x: fixed.size.width, y: 0)
+            context?.scaleBy(x: -1.0, y: 1.0)
+            fixed.draw(in: CGRect(origin: .zero, size: fixed.size))
+            let mirrored = UIGraphicsGetImageFromCurrentImageContext() ?? fixed
+            UIGraphicsEndImageContext()
+            return mirrored
+        } else {
+            return fixed
         }
     }
+}
+
+#Preview {
+    DiagnosisView()
 } 

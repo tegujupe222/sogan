@@ -176,7 +176,21 @@ class DataManager: ObservableObject {
             let data = try Data(contentsOf: fileURL)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            faceReadingHistory = try decoder.decode([FaceReadingResult].self, from: data)
+            var loaded = try decoder.decode([FaceReadingResult].self, from: data)
+            // adviceが空の履歴には再生成を適用
+            for i in loaded.indices {
+                if loaded[i].advice.isEmpty {
+                    _ = loaded[i].faceAnalysis
+                    loaded[i] = FaceReadingResult(
+                        id: loaded[i].id,
+                        userId: loaded[i].userId,
+                        date: loaded[i].date,
+                        imageData: loaded[i].imageData,
+                        sessionId: loaded[i].sessionId
+                    )
+                }
+            }
+            faceReadingHistory = loaded
         } catch {
             print("履歴の読み込みに失敗しました: \(error)")
             faceReadingHistory = []
@@ -233,5 +247,56 @@ class DataManager: ObservableObject {
         return faceReadingHistory.filter { result in
             result.userId == selectedUserId && calendar.isDate(result.date, inSameDayAs: today)
         }
+    }
+    
+    // MARK: - ダイヤモンド管理
+    func getDiamonds(for userId: UUID) -> Int {
+        if let profile = getUserProfile(for: userId) {
+            return profile.diamonds
+        }
+        return 10 // デフォルト値
+    }
+    
+    func consumeDiamonds(_ amount: Int, for userId: UUID) {
+        if let index = userProfiles.firstIndex(where: { $0.userId == userId }) {
+            userProfiles[index].diamonds = max(0, userProfiles[index].diamonds - amount)
+            saveUserProfiles()
+        }
+    }
+    
+    func addDiamonds(_ amount: Int, for userId: UUID) {
+        if let index = userProfiles.firstIndex(where: { $0.userId == userId }) {
+            userProfiles[index].diamonds = min(999, userProfiles[index].diamonds + amount)
+            saveUserProfiles()
+        }
+    }
+    
+    func refillDailyDiamonds() {
+        for i in userProfiles.indices {
+            if userProfiles[i].diamonds < 10 {
+                userProfiles[i].diamonds = 10
+            }
+        }
+        saveUserProfiles()
+    }
+    
+    // ダイヤモンド購入
+    func purchaseDiamonds(_ amount: Int, for userId: UUID) {
+        addDiamonds(amount, for: userId)
+    }
+    
+    // ダイヤモンド購入オプション
+    struct DiamondPurchaseOption: Identifiable {
+        let id = UUID()
+        let diamonds: Int
+        let price: Int // 円
+        let description: String
+        let isPopular: Bool
+        
+        static let options: [DiamondPurchaseOption] = [
+            DiamondPurchaseOption(diamonds: 150, price: 300, description: "スタンダード", isPopular: true),
+            DiamondPurchaseOption(diamonds: 500, price: 800, description: "お得パック", isPopular: false),
+            DiamondPurchaseOption(diamonds: 1200, price: 1500, description: "プレミアム", isPopular: false)
+        ]
     }
 }

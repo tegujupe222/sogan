@@ -52,6 +52,7 @@ struct UserProfile: Codable {
     var favoriteFaceType: FaceType?
     var streakDays: Int
     var lastDiagnosisDate: Date?
+    var diamonds: Int
     
     init(userId: UUID) {
         self.userId = userId
@@ -61,6 +62,7 @@ struct UserProfile: Codable {
         self.favoriteFaceType = nil
         self.streakDays = 0
         self.lastDiagnosisDate = nil
+        self.diamonds = 10 // 初期ダイヤモンド数
     }
 }
 
@@ -114,18 +116,154 @@ struct FaceReadingResult: Codable, Identifiable {
         self.careerLuck = scores.career
         self.wealthLuck = scores.wealth
         
-        // 表情分析
-        self.smileScore = Int.random(in: 40...90)
-        self.energyScore = Int.random(in: 50...85)
-        self.stressScore = Int.random(in: 10...60)
+        // 表情分析（スコアに基づいて調整）
+        self.smileScore = max(30, min(95, scores.overall + Int.random(in: -10...10)))
+        self.energyScore = max(40, min(90, scores.health + Int.random(in: -15...15)))
+        self.stressScore = max(5, min(70, 100 - scores.overall + Int.random(in: -10...10)))
         
-        // 顔相分類
-        self.faceType = FaceType.allCases.randomElement() ?? .fortunate
-        self.moodType = MoodType.allCases.randomElement() ?? .happy
+        // 顔相分類（スコアに基づいて決定）
+        self.faceType = Self.determineFaceType(from: scores)
+        self.moodType = Self.determineMoodType(from: scores, smileScore: self.smileScore, stressScore: self.stressScore)
         
         // アドバイス生成
         self.advice = analysis.generateBasicAdvice()
         self.detailedAdvice = analysis.generateDetailedAdvice()
+    }
+    
+    // API分析結果から初期化するイニシャライザ
+    init(fromAPIAnalysis analysis: FaceReadingAnalysis, userId: UUID, date: Date = Date(), imageData: Data? = nil, sessionId: String = UUID().uuidString) {
+        self.id = UUID()
+        self.userId = userId
+        self.date = date
+        self.imageData = imageData
+        self.sessionId = sessionId
+        
+        // API結果からスコアを設定
+        self.overallLuck = analysis.overallScore
+        self.wealthLuck = analysis.wealthLuck.score
+        self.loveLuck = analysis.loveLuck.score
+        self.careerLuck = analysis.careerLuck.score
+        self.healthLuck = analysis.healthLuck.score
+        
+        // 表情分析スコアを計算
+        self.smileScore = max(30, min(95, analysis.overallScore + Int.random(in: -10...10)))
+        self.energyScore = max(40, min(90, analysis.healthLuck.score + Int.random(in: -15...15)))
+        self.stressScore = max(5, min(70, 100 - analysis.overallScore + Int.random(in: -10...10)))
+        
+        // 顔相タイプと気分タイプを設定
+        self.faceType = Self.convertFaceType(analysis.faceType)
+        self.moodType = Self.convertMoodType(analysis.moodType)
+        
+        // アドバイスを設定
+        self.advice = analysis.wealthLuck.advice + analysis.loveLuck.advice + analysis.careerLuck.advice + analysis.healthLuck.advice
+        
+        // 詳細アドバイスを生成
+        self.detailedAdvice = Self.convertToDetailedAdvice(analysis)
+        
+        // 顔パーツ分析を生成（API結果に基づいて調整）
+        self.faceAnalysis = FaceAnalysis()
+    }
+    
+    // API結果の顔相タイプを既存のenumに変換
+    private static func convertFaceType(_ apiFaceType: String) -> FaceType {
+        switch apiFaceType {
+        case "福相": return .fortunate
+        case "元気相": return .energetic
+        case "疲労相": return .tired
+        case "ストレス相": return .stressed
+        case "バランス相": return .balanced
+        default: return .balanced
+        }
+    }
+    
+    // API結果の気分タイプを既存のenumに変換
+    private static func convertMoodType(_ apiMoodType: String) -> MoodType {
+        switch apiMoodType {
+        case "明るい": return .happy
+        case "落ち着いた": return .calm
+        case "興奮": return .excited
+        case "心配": return .worried
+        case "普通": return .neutral
+        default: return .neutral
+        }
+    }
+    
+    // API結果を詳細アドバイスに変換
+    private static func convertToDetailedAdvice(_ analysis: FaceReadingAnalysis) -> [DetailedAdvice] {
+        var detailedAdvice: [DetailedAdvice] = []
+        
+        // 各運勢のアドバイスを詳細アドバイスに変換
+        detailedAdvice.append(contentsOf: analysis.wealthLuck.advice.enumerated().map { index, advice in
+            DetailedAdvice(
+                category: .lifestyle,
+                title: "金運アドバイス \(index + 1)",
+                description: advice,
+                priority: .medium
+            )
+        })
+        
+        detailedAdvice.append(contentsOf: analysis.loveLuck.advice.enumerated().map { index, advice in
+            DetailedAdvice(
+                category: .communication,
+                title: "恋愛運アドバイス \(index + 1)",
+                description: advice,
+                priority: .medium
+            )
+        })
+        
+        detailedAdvice.append(contentsOf: analysis.careerLuck.advice.enumerated().map { index, advice in
+            DetailedAdvice(
+                category: .lifestyle,
+                title: "仕事運アドバイス \(index + 1)",
+                description: advice,
+                priority: .medium
+            )
+        })
+        
+        detailedAdvice.append(contentsOf: analysis.healthLuck.advice.enumerated().map { index, advice in
+            DetailedAdvice(
+                category: .health,
+                title: "健康運アドバイス \(index + 1)",
+                description: advice,
+                priority: .medium
+            )
+        })
+        
+        return detailedAdvice
+    }
+    
+    // スコアに基づいて顔相タイプを決定
+    private static func determineFaceType(from scores: (overall: Int, love: Int, health: Int, career: Int, wealth: Int)) -> FaceType {
+        let overall = scores.overall
+        
+        if overall >= 80 {
+            return .fortunate
+        } else if overall >= 70 {
+            return .energetic
+        } else if overall >= 50 {
+            return .balanced
+        } else if scores.health < 50 {
+            return .tired
+        } else {
+            return .stressed
+        }
+    }
+    
+    // スコアに基づいて気分タイプを決定
+    private static func determineMoodType(from scores: (overall: Int, love: Int, health: Int, career: Int, wealth: Int), smileScore: Int, stressScore: Int) -> MoodType {
+        let overall = scores.overall
+        
+        if overall >= 80 && smileScore >= 80 {
+            return .excited
+        } else if overall >= 70 && stressScore < 30 {
+            return .happy
+        } else if overall >= 60 && stressScore < 50 {
+            return .calm
+        } else if stressScore > 60 || overall < 40 {
+            return .worried
+        } else {
+            return .neutral
+        }
     }
     
     enum CodingKeys: String, CodingKey {
@@ -245,27 +383,57 @@ struct FaceAnalysis: Codable {
         return max(0, min(100, score))
     }
     
-    // 基本アドバイス生成
+    // 基本アドバイス生成（個人の診断結果に基づく）
     func generateBasicAdvice() -> [String] {
         var advice: [String] = []
         
         // スコアに基づいてアドバイスを選択
         let scores = calculateScores()
         
+        // 恋愛運が低い場合のアドバイス
         if scores.love < 60 {
-            advice.append("眉と目の間隔を意識して、明るい表情を心がけましょう")
-        }
-        if scores.health < 60 {
-            advice.append("十分な睡眠と水分補給で肌の調子を整えましょう")
-        }
-        if scores.career < 60 {
-            advice.append("額のマッサージで運気を開き、自信を持って行動しましょう")
-        }
-        if scores.wealth < 60 {
-            advice.append("鼻の周りを清潔に保ち、金運アップを図りましょう")
+            if scores.love < 40 {
+                advice.append("眉と目の間隔を意識して、明るい表情を心がけましょう。特に笑顔の練習を毎日5分行うことで恋愛運が向上します")
+            } else {
+                advice.append("眉の形を整え、目元を明るくすることで恋愛運がアップします")
+            }
         }
         
-        // デフォルトアドバイス
+        // 健康運が低い場合のアドバイス
+        if scores.health < 60 {
+            if scores.health < 40 {
+                advice.append("十分な睡眠と水分補給で肌の調子を整えましょう。特に額の艶を保つことが重要です")
+            } else {
+                advice.append("肌の状態を整え、十分な休息を取ることで健康運が向上します")
+            }
+        }
+        
+        // 仕事運が低い場合のアドバイス
+        if scores.career < 60 {
+            if scores.career < 40 {
+                advice.append("額のマッサージで運気を開き、自信を持って行動しましょう。特に朝のルーティンに取り入れることをお勧めします")
+            } else {
+                advice.append("額を清潔に保ち、明るい表情で仕事に臨むことで仕事運がアップします")
+            }
+        }
+        
+        // 金運が低い場合のアドバイス
+        if scores.wealth < 60 {
+            if scores.wealth < 40 {
+                advice.append("鼻の周りを清潔に保ち、金運アップを図りましょう。特に鼻のマッサージが効果的です")
+            } else {
+                advice.append("鼻の状態を整え、清潔感を保つことで金運が向上します")
+            }
+        }
+        
+        // 全体的な運気が高い場合のアドバイス
+        if scores.overall >= 80 {
+            advice.append("現在の運気は非常に良好です。積極的に新しいことにチャレンジしましょう")
+        } else if scores.overall >= 60 {
+            advice.append("運気は安定しています。現状維持を心がけつつ、小さな改善を積み重ねましょう")
+        }
+        
+        // デフォルトアドバイス（運気が全体的に良好な場合）
         if advice.isEmpty {
             advice = [
                 "朝日を浴びて体内時計を整えましょう",
@@ -277,7 +445,7 @@ struct FaceAnalysis: Codable {
         return advice
     }
     
-    // 詳細アドバイス生成
+    // 詳細アドバイス生成（個人の診断結果に基づく）
     func generateDetailedAdvice() -> [DetailedAdvice] {
         var detailedAdvice: [DetailedAdvice] = []
         
@@ -291,6 +459,49 @@ struct FaceAnalysis: Codable {
         detailedAdvice.append(contentsOf: ears.generateAdvice())
         detailedAdvice.append(contentsOf: jaw.generateAdvice())
         detailedAdvice.append(contentsOf: skin.generateAdvice())
+        
+        // スコアに基づく追加アドバイス
+        let scores = calculateScores()
+        
+        // 恋愛運が特に低い場合の特別アドバイス
+        if scores.love < 40 {
+            detailedAdvice.append(DetailedAdvice(
+                category: .communication,
+                title: "恋愛運アップの表情トレーニング",
+                description: "眉と目の間隔を意識した表情練習を毎日10分。特に笑顔の練習と目元の明るさを重視しましょう",
+                priority: .high
+            ))
+        }
+        
+        // 健康運が特に低い場合の特別アドバイス
+        if scores.health < 40 {
+            detailedAdvice.append(DetailedAdvice(
+                category: .health,
+                title: "健康運回復のための生活習慣改善",
+                description: "睡眠時間を7-8時間確保し、朝日を浴びる習慣をつけましょう。肌の状態改善が健康運向上につながります",
+                priority: .high
+            ))
+        }
+        
+        // 仕事運が特に低い場合の特別アドバイス
+        if scores.career < 40 {
+            detailedAdvice.append(DetailedAdvice(
+                category: .lifestyle,
+                title: "仕事運向上のための朝ルーティン",
+                description: "朝起きてから額のマッサージを5分。その後、明るい表情で鏡を見て自己暗示をかけましょう",
+                priority: .high
+            ))
+        }
+        
+        // 金運が特に低い場合の特別アドバイス
+        if scores.wealth < 40 {
+            detailedAdvice.append(DetailedAdvice(
+                category: .beauty,
+                title: "金運アップのための鼻ケア",
+                description: "鼻の周りを清潔に保ち、毎日マッサージを3分。特に鼻の先端を優しく揉むことで金運が向上します",
+                priority: .high
+            ))
+        }
         
         return detailedAdvice
     }

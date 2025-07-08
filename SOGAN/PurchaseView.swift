@@ -5,6 +5,8 @@
 //  Created by Igasaki Gouta on 2025/07/07.
 //
 
+// 旧課金UIはダイヤ消費型に移行のため無効化
+/*
 import SwiftUI
 import StoreKit
 
@@ -247,4 +249,5 @@ struct PurchaseCard: View {
 
 #Preview {
     PurchaseView()
-} 
+}
+*/ 

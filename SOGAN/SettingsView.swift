@@ -120,100 +120,6 @@ struct SettingsView: View {
                         .offset(y: animateContent ? 0 : 20)
                         .animation(.easeOut(duration: 0.6).delay(0.2), value: animateContent)
                         
-                        // プレミアム機能
-                        SettingsSection(
-                            title: "プレミアム機能",
-                            icon: "crown.fill",
-                            color: .orange
-                        ) {
-                            VStack(spacing: 16) {
-                                // プレミアム機能の説明
-                                VStack(spacing: 12) {
-                                    HStack {
-                                        Image(systemName: "sparkles")
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundColor(.orange)
-                                        
-                                        Text("プレミアム機能でさらに詳しく")
-                                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                                            .foregroundColor(.primary)
-                                        
-                                        Spacer()
-                                    }
-                                    
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        PremiumFeatureRow(
-                                            icon: "chart.line.uptrend.xyaxis",
-                                            title: "詳細分析アンロック",
-                                            description: "より詳細な運気分析を確認"
-                                        )
-                                        
-                                        PremiumFeatureRow(
-                                            icon: "clock.arrow.circlepath",
-                                            title: "履歴保存期間延長",
-                                            description: "診断履歴を長期間保存"
-                                        )
-                                        
-                                        PremiumFeatureRow(
-                                            icon: "square.and.arrow.up",
-                                            title: "結果エクスポート",
-                                            description: "診断結果を画像で保存"
-                                        )
-                                    }
-                                    .padding(.leading, 28)
-                                }
-                                .padding(16)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color.orange.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 16)
-                                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                                        )
-                                )
-                                
-                                // プレミアムボタン
-                                Button(action: {
-                                    showingPurchase = true
-                                }) {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "crown.fill")
-                                            .font(.system(size: 20, weight: .semibold))
-                                            .foregroundColor(.white)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("プレミアム機能を確認")
-                                                .font(.system(size: 16, weight: .bold, design: .rounded))
-                                                .foregroundColor(.white)
-                                            
-                                            Text("詳細分析・履歴保存・エクスポート")
-                                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                                .foregroundColor(.white.opacity(0.8))
-                                        }
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.white)
-                                    }
-                                    .padding(20)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [.orange, .pink],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    .shadow(color: .orange.opacity(0.3), radius: 8, x: 0, y: 4)
-                                }
-                            }
-                        }
-                        .opacity(animateContent ? 1.0 : 0.0)
-                        .offset(y: animateContent ? 0 : 20)
-                        .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                        
                         // データ管理
                         SettingsSection(
                             title: "データ管理",
@@ -292,12 +198,6 @@ struct SettingsView: View {
                                     value: "SOGAN Team",
                                     icon: "person.fill"
                                 )
-                                
-                                SettingsLinkRow(
-                                    title: "公式ウェブサイト",
-                                    icon: "globe",
-                                    url: "https://example.com"
-                                )
                             }
                         }
                         .opacity(animateContent ? 1.0 : 0.0)
@@ -321,9 +221,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingUserManagement) {
             UserManagementView()
-        }
-        .sheet(isPresented: $showingPurchase) {
-            PurchaseView()
         }
         .alert("履歴を削除", isPresented: $showingDeleteConfirmation) {
             Button("削除", role: .destructive) {
@@ -484,36 +381,6 @@ struct SettingsButtonRow: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.secondary)
-            }
-            .padding(20)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-// MARK: - 設定リンク行
-struct SettingsLinkRow: View {
-    let title: String
-    let icon: String
-    let url: String
-    
-    var body: some View {
-        Link(destination: URL(string: url)!) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.blue)
-                    .frame(width: 24)
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Image(systemName: "arrow.up.right.square")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.blue)
             }
             .padding(20)
         }
@@ -769,34 +636,6 @@ struct PolicySection: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
         )
-    }
-}
-
-// MARK: - プレミアム機能行
-struct PremiumFeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.orange)
-                .frame(width: 20)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
-                
-                Text(description)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
     }
 }
 

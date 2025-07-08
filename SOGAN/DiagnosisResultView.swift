@@ -405,6 +405,31 @@ struct FacePartAnalysisCard: View {
     let icon: String
     let color: Color
     
+    // 型安全な分析データの取得
+    private var analysisText: String {
+        if let forehead = analysis as? ForeheadAnalysis {
+            return "形状: \(forehead.shape.rawValue)\n艶: \(forehead.luster)\n幅: \(forehead.width)\n高さ: \(forehead.height)"
+        } else if let eyebrows = analysis as? EyebrowAnalysis {
+            return "形状: \(eyebrows.shape.rawValue)\n濃さ: \(eyebrows.thickness)\n長さ: \(eyebrows.length)\n位置: \(eyebrows.position.rawValue)"
+        } else if let eyes = analysis as? EyeAnalysis {
+            return "大きさ: \(eyes.size)\n形状: \(eyes.shape.rawValue)\n涙袋: \(eyes.tearBag)\n輝き: \(eyes.brightness)"
+        } else if let nose = analysis as? NoseAnalysis {
+            return "高さ: \(nose.height)\n幅: \(nose.width)\n形状: \(nose.shape.rawValue)\n鼻先: \(nose.tip.rawValue)"
+        } else if let mouth = analysis as? MouthAnalysis {
+            return "大きさ: \(mouth.size)\n唇厚み: \(mouth.lipThickness)\n口角角度: \(mouth.cornerAngle)\n形状: \(mouth.shape.rawValue)"
+        } else if let cheeks = analysis as? CheekAnalysis {
+            return "肉付き: \(cheeks.fullness)\n血色: \(cheeks.color)\n頬骨高さ: \(cheeks.boneHeight)"
+        } else if let ears = analysis as? EarAnalysis {
+            return "大きさ: \(ears.size)\n厚み: \(ears.thickness)\n位置: \(ears.position.rawValue)\n形状: \(ears.shape.rawValue)"
+        } else if let jaw = analysis as? JawAnalysis {
+            return "形状: \(jaw.shape.rawValue)\n強さ: \(jaw.strength)\n大きさ: \(jaw.size)"
+        } else if let skin = analysis as? SkinAnalysis {
+            return "肌質: \(skin.texture)\n色艶: \(skin.color)\nシミ・ホクロ: \(skin.spots)"
+        } else {
+            return "分析データなし"
+        }
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -419,52 +444,11 @@ struct FacePartAnalysisCard: View {
                 Spacer()
             }
             
-            VStack(alignment: .leading, spacing: 8) {
-                // 各パーツの特徴を表示
-                if let forehead = analysis as? ForeheadAnalysis {
-                    AnalysisDetailRow(label: "形状", value: forehead.shape.rawValue)
-                    AnalysisDetailRow(label: "艶", value: "\(forehead.luster)")
-                    AnalysisDetailRow(label: "幅", value: "\(forehead.width)")
-                    AnalysisDetailRow(label: "高さ", value: "\(forehead.height)")
-                } else if let eyebrows = analysis as? EyebrowAnalysis {
-                    AnalysisDetailRow(label: "形状", value: eyebrows.shape.rawValue)
-                    AnalysisDetailRow(label: "濃さ", value: "\(eyebrows.thickness)")
-                    AnalysisDetailRow(label: "長さ", value: "\(eyebrows.length)")
-                    AnalysisDetailRow(label: "位置", value: eyebrows.position.rawValue)
-                } else if let eyes = analysis as? EyeAnalysis {
-                    AnalysisDetailRow(label: "大きさ", value: "\(eyes.size)")
-                    AnalysisDetailRow(label: "形状", value: eyes.shape.rawValue)
-                    AnalysisDetailRow(label: "涙袋", value: "\(eyes.tearBag)")
-                    AnalysisDetailRow(label: "輝き", value: "\(eyes.brightness)")
-                } else if let nose = analysis as? NoseAnalysis {
-                    AnalysisDetailRow(label: "高さ", value: "\(nose.height)")
-                    AnalysisDetailRow(label: "幅", value: "\(nose.width)")
-                    AnalysisDetailRow(label: "形状", value: nose.shape.rawValue)
-                    AnalysisDetailRow(label: "鼻先", value: nose.tip.rawValue)
-                } else if let mouth = analysis as? MouthAnalysis {
-                    AnalysisDetailRow(label: "大きさ", value: "\(mouth.size)")
-                    AnalysisDetailRow(label: "唇厚み", value: "\(mouth.lipThickness)")
-                    AnalysisDetailRow(label: "口角角度", value: "\(mouth.cornerAngle)")
-                    AnalysisDetailRow(label: "形状", value: mouth.shape.rawValue)
-                } else if let cheeks = analysis as? CheekAnalysis {
-                    AnalysisDetailRow(label: "肉付き", value: "\(cheeks.fullness)")
-                    AnalysisDetailRow(label: "血色", value: "\(cheeks.color)")
-                    AnalysisDetailRow(label: "頬骨高さ", value: "\(cheeks.boneHeight)")
-                } else if let ears = analysis as? EarAnalysis {
-                    AnalysisDetailRow(label: "大きさ", value: "\(ears.size)")
-                    AnalysisDetailRow(label: "厚み", value: "\(ears.thickness)")
-                    AnalysisDetailRow(label: "位置", value: ears.position.rawValue)
-                    AnalysisDetailRow(label: "形状", value: ears.shape.rawValue)
-                } else if let jaw = analysis as? JawAnalysis {
-                    AnalysisDetailRow(label: "形状", value: jaw.shape.rawValue)
-                    AnalysisDetailRow(label: "強さ", value: "\(jaw.strength)")
-                    AnalysisDetailRow(label: "大きさ", value: "\(jaw.size)")
-                } else if let skin = analysis as? SkinAnalysis {
-                    AnalysisDetailRow(label: "肌質", value: "\(skin.texture)")
-                    AnalysisDetailRow(label: "色艶", value: "\(skin.color)")
-                    AnalysisDetailRow(label: "シミ・ホクロ", value: "\(skin.spots)")
-                }
-            }
+            Text(analysisText)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(nil)
         }
         .padding(16)
         .background(

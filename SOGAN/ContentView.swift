@@ -40,6 +40,23 @@ struct ContentView: View {
                             Text("設定")
                         }
                 }
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        if let userId = dataManager.selectedUserId {
+                            HStack(spacing: 4) {
+                                Text("💎")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("\(dataManager.getDiamonds(for: userId))")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                            }
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                    }
+                }
                 .accentColor(.orange)
                 .preferredColorScheme(.light)
             } else {

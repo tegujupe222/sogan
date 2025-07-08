@@ -13,6 +13,8 @@ struct UserManagementView: View {
     @State private var showingAddUser = false
     @State private var selectedUser: User?
     @State private var showingEditUser = false
+    @State private var showingDiamondAlert = false
+    @State private var showingPurchaseView = false
     
     var body: some View {
         NavigationView {
@@ -63,7 +65,15 @@ struct UserManagementView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showingAddUser = true }) {
+                    Button(action: {
+                        if let userId = dataManager.selectedUserId,
+                           dataManager.getDiamonds(for: userId) >= 3 {
+                            dataManager.consumeDiamonds(3, for: userId)
+                            showingAddUser = true
+                        } else {
+                            showingDiamondAlert = true
+                        }
+                    }) {
                         Image(systemName: "person.badge.plus")
                             .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(.orange)
@@ -78,6 +88,21 @@ struct UserManagementView: View {
             if let user = selectedUser {
                 EditUserView(user: user)
             }
+        }
+        .alert("ダイヤ不足", isPresented: $showingDiamondAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("ダイヤ購入") {
+                showingPurchaseView = true
+            }
+        } message: {
+            if let userId = dataManager.selectedUserId {
+                Text("ユーザー追加には3ダイヤが必要です。現在のダイヤ: \(dataManager.getDiamonds(for: userId))")
+            } else {
+                Text("ユーザー追加には3ダイヤが必要です。")
+            }
+        }
+        .sheet(isPresented: $showingPurchaseView) {
+            DiamondPurchaseView()
         }
     }
     
@@ -147,10 +172,20 @@ struct CurrentUserCard: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    if let profile = dataManager.getUserProfile(for: user.id) {
-                        Text("診断回数: \(profile.totalDiagnoses)回")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary)
+                    HStack(spacing: 12) {
+                        if let profile = dataManager.getUserProfile(for: user.id) {
+                            Text("診断回数: \(profile.totalDiagnoses)回")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        HStack(spacing: 4) {
+                            Text("💎")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("\(dataManager.getDiamonds(for: user.id))")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                        }
+                        .foregroundColor(.blue)
                     }
                 }
                 

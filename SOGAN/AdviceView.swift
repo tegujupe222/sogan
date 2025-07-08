@@ -8,10 +8,21 @@
 import SwiftUI
 
 struct AdviceView: View {
+    @StateObject private var dataManager = DataManager.shared
+    @StateObject private var adviceService = AdviceService()
     @State private var selectedCategory: AdviceCategory = .lifestyle
     @State private var showingExerciseDetail = false
     @State private var selectedExercise: ExerciseItem?
     @State private var animateContent = false
+    @State private var showingDiamondAlert = false
+    @State private var showingAdviceDetail = false
+    @State private var showingDiamondPurchase = false
+    
+    // 最新診断のアドバイスを取得
+    private var latestAdvice: [String] {
+        guard let userId = dataManager.selectedUserId else { return [] }
+        return dataManager.getHistoryForUser(userId).last?.advice ?? []
+    }
     
     var body: some View {
         NavigationView {
@@ -74,47 +85,21 @@ struct AdviceView: View {
                     // コンテンツ
                     ScrollView {
                         VStack(spacing: 25) {
-                            switch selectedCategory {
-                            case .lifestyle:
-                                LifestyleAdviceView()
-                                    .opacity(animateContent ? 1.0 : 0.0)
-                                    .offset(y: animateContent ? 0 : 20)
-                                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                            case .beauty:
-                                BeautyAdviceView()
-                                    .opacity(animateContent ? 1.0 : 0.0)
-                                    .offset(y: animateContent ? 0 : 20)
-                                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                            case .health:
-                                HealthAdviceView()
-                                    .opacity(animateContent ? 1.0 : 0.0)
-                                    .offset(y: animateContent ? 0 : 20)
-                                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                            case .communication:
-                                CommunicationAdviceView()
-                                    .opacity(animateContent ? 1.0 : 0.0)
-                                    .offset(y: animateContent ? 0 : 20)
-                                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                            case .exercise:
-                                ExerciseAdviceView(
-                                    onExerciseSelected: { exercise in
-                                        selectedExercise = exercise
-                                        showingExerciseDetail = true
-                                    }
+                            // ダイヤモンド情報
+                            DiamondInfoCard(showingDiamondPurchase: $showingDiamondPurchase)
+                            
+                            // 選択カテゴリに応じてアドバイスを表示
+                            if latestAdvice.isEmpty {
+                                NoAdviceView()
+                            } else {
+                                // AIアドバイス生成ボタン
+                                AIAdviceGenerationCard(
+                                    category: selectedCategory,
+                                    onGenerate: generateAIAdvice
                                 )
-                                .opacity(animateContent ? 1.0 : 0.0)
-                                .offset(y: animateContent ? 0 : 20)
-                                .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                            case .diet:
-                                DietAdviceView()
-                                    .opacity(animateContent ? 1.0 : 0.0)
-                                    .offset(y: animateContent ? 0 : 20)
-                                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
-                            case .mental:
-                                MentalAdviceView()
-                                    .opacity(animateContent ? 1.0 : 0.0)
-                                    .offset(y: animateContent ? 0 : 20)
-                                    .animation(.easeOut(duration: 0.6).delay(0.3), value: animateContent)
+                                
+                                // 既存のアドバイス
+                                ExistingAdviceView(advice: latestAdvice)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -130,6 +115,69 @@ struct AdviceView: View {
         .sheet(isPresented: $showingExerciseDetail) {
             if let exercise = selectedExercise {
                 ExerciseDetailView(exercise: exercise)
+            }
+        }
+        .sheet(isPresented: $showingAdviceDetail) {
+            if let advice = adviceService.generatedAdvice {
+                AIAdviceDetailView(advice: advice)
+            }
+        }
+        .alert("ダイヤモンド不足", isPresented: $showingDiamondAlert) {
+            Button("キャンセル", role: .cancel) { }
+            Button("ダイヤ購入") {
+                showingDiamondPurchase = true
+            }
+        } message: {
+            if let userId = dataManager.selectedUserId {
+                Text("AIアドバイス生成には1ダイヤが必要です。現在のダイヤ: \(dataManager.getDiamonds(for: userId))")
+            } else {
+                Text("AIアドバイス生成には1ダイヤが必要です。")
+            }
+        }
+        .sheet(isPresented: $showingDiamondPurchase) {
+            DiamondPurchaseView()
+        }
+    }
+    
+    // AIアドバイス生成
+    private func generateAIAdvice() {
+        guard let userId = dataManager.selectedUserId,
+              let latestResult = dataManager.getHistoryForUser(userId).last else {
+            return
+        }
+        
+        // ダイヤモンドチェック
+        let currentDiamonds = dataManager.getDiamonds(for: userId)
+        if currentDiamonds < 1 {
+            showingDiamondAlert = true
+            return
+        }
+        
+        // 診断データを文字列に変換
+        let diagnosisData = """
+        総合運: \(latestResult.overallLuck)
+        金運: \(latestResult.wealthLuck)
+        恋愛運: \(latestResult.loveLuck)
+        仕事運: \(latestResult.careerLuck)
+        健康運: \(latestResult.healthLuck)
+        顔相タイプ: \(latestResult.faceType.rawValue)
+        気分タイプ: \(latestResult.moodType.rawValue)
+        """
+        
+        // AIアドバイス生成
+        Task {
+            await adviceService.generateAdvice(
+                diagnosisData: diagnosisData,
+                category: selectedCategory.rawValue,
+                diamonds: currentDiamonds
+            )
+            
+            await MainActor.run {
+                if adviceService.generatedAdvice != nil {
+                    showingAdviceDetail = true
+                    // ダイヤモンドを消費
+                    dataManager.consumeDiamonds(1, for: userId)
+                }
             }
         }
     }
@@ -763,9 +811,9 @@ struct ExerciseDetailView: View {
                             .fontWeight(.semibold)
                         
                         HStack {
-                            InfoItem(icon: "clock", title: "所要時間", value: exercise.duration)
+                            InfoItem(icon: "clock", title: "所要時間", description: exercise.duration)
                             Spacer()
-                            InfoItem(icon: "star", title: "難易度", value: exercise.difficulty)
+                            InfoItem(icon: "star", title: "難易度", description: exercise.difficulty)
                         }
                     }
                     
@@ -836,7 +884,7 @@ struct ExerciseDetailView: View {
 struct InfoItem: View {
     let icon: String
     let title: String
-    let value: String
+    let description: String
     
     var body: some View {
         VStack(spacing: 8) {
@@ -848,7 +896,7 @@ struct InfoItem: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             
-            Text(value)
+            Text(description)
                 .font(.subheadline)
                 .fontWeight(.medium)
         }
@@ -868,6 +916,391 @@ struct ExerciseItem: Identifiable {
     let difficulty: String
     let steps: [String]
     let benefits: [String]
+}
+
+// MARK: - ダイヤモンド情報カード
+struct DiamondInfoCard: View {
+    @StateObject private var dataManager = DataManager.shared
+    @Binding var showingDiamondPurchase: Bool
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.blue)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("現在のダイヤモンド")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                    
+                    if let userId = dataManager.selectedUserId {
+                        HStack(spacing: 4) {
+                            Text("💎")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("\(dataManager.getDiamonds(for: userId))")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.blue)
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            Text("💎")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("0")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(.blue)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                Button("購入") {
+                    showingDiamondPurchase = true
+                }
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.blue)
+                .cornerRadius(12)
+            }
+            
+            HStack {
+                Text("AIアドバイス生成で1ダイヤモンドを消費します")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.blue.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                )
+        )
+    }
+}
+
+// MARK: - AIアドバイス生成カード
+struct AIAdviceGenerationCard: View {
+    let category: AdviceCategory
+    let onGenerate: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.orange)
+                
+                Text("AIアドバイス生成")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                // ダイヤモンド消費表示
+                HStack(spacing: 4) {
+                    Text("💎")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("1")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                }
+                .foregroundColor(.blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(8)
+            }
+            
+            Text("\(category.rawValue)に関するパーソナライズされたアドバイスをAIが生成します")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.leading)
+            
+            Button(action: onGenerate) {
+                HStack {
+                    Image(systemName: "wand.and.stars")
+                    Text("アドバイスを生成")
+                    
+                    Spacer()
+                    
+                    // ダイヤモンド消費表示
+                    HStack(spacing: 4) {
+                        Text("💎")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("1")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(8)
+                }
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(
+                    LinearGradient(
+                        colors: [.orange, .orange.opacity(0.8)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(22)
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        )
+    }
+}
+
+// MARK: - 既存アドバイスビュー
+struct ExistingAdviceView: View {
+    let advice: [String]
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("既存のアドバイス")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+            
+            LazyVStack(spacing: 12) {
+                ForEach(Array(advice.enumerated()), id: \.offset) { index, adviceText in
+                    HStack(alignment: .top, spacing: 12) {
+                        Circle()
+                            .fill(Color.orange.opacity(0.2))
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Text("\(index + 1)")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundColor(.orange)
+                            )
+                        
+                        Text(adviceText)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.leading)
+                        
+                        Spacer()
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemBackground))
+                            .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - アドバイスなしビュー
+struct NoAdviceView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 60))
+                .foregroundColor(.orange.opacity(0.6))
+            
+            Text("診断結果がありません")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+            
+            Text("まずは診断を行ってください")
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+        }
+        .padding(40)
+    }
+}
+
+// MARK: - AIアドバイス詳細ビュー
+struct AIAdviceDetailView: View {
+    let advice: AdviceData
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // タイトル
+                    VStack(spacing: 8) {
+                        Text(advice.title)
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                        
+                        Text(advice.description)
+                            .font(.system(size: 16, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    
+                    // 詳細情報
+                    VStack(spacing: 16) {
+                        InfoRow(icon: "clock", title: "所要時間", description: advice.duration)
+                        InfoRow(icon: "star", title: "難易度", description: advice.difficulty)
+                    }
+                    
+                    // ステップ
+                    if !advice.steps.isEmpty {
+                        VStack(spacing: 16) {
+                            HStack {
+                                Text("実践ステップ")
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                            
+                            LazyVStack(spacing: 12) {
+                                ForEach(Array(advice.steps.enumerated()), id: \.offset) { index, step in
+                                    StepCard(step: step, index: index + 1)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // コツ
+                    if !advice.tips.isEmpty {
+                        VStack(spacing: 16) {
+                            HStack {
+                                Text("コツ")
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    .foregroundColor(.primary)
+                                Spacer()
+                            }
+                            
+                            LazyVStack(spacing: 12) {
+                                ForEach(Array(advice.tips.enumerated()), id: \.offset) { index, tip in
+                                    TipCard(tip: tip, index: index + 1)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") {
+                        dismiss()
+                    }
+                    .foregroundColor(.orange)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 情報行
+struct InfoRow: View {
+    let icon: String
+    let title: String
+    let description: String
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.orange)
+                .frame(width: 20)
+            
+            Text(title)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            Text(description)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(.primary)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
+        )
+    }
+}
+
+// MARK: - ステップカード
+struct StepCard: View {
+    let step: String
+    let index: Int
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(Color.orange)
+                .frame(width: 24, height: 24)
+                .overlay(
+                    Text("\(index)")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                )
+            
+            Text(step)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
+        )
+    }
+}
+
+// MARK: - コツカード
+struct TipCard: View {
+    let tip: String
+    let index: Int
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.yellow)
+                .frame(width: 24)
+            
+            Text(tip)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 3)
+        )
+    }
 }
 
 #Preview {
