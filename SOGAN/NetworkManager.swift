@@ -62,12 +62,26 @@ struct DetailedAnalysis: Codable {
     let skin: String
 }
 
+// MARK: - ダイヤモンドAPIレスポンス
+struct DiamondResponse: Codable {
+    let success: Bool
+    let diamonds: Int
+}
+
+// MARK: - AIアドバイスAPIレスポンス
+struct AIAdviceResponse: Codable {
+    let success: Bool
+    let advice: AdviceData
+    let diamondsUsed: Int
+    let timestamp: String
+}
+
 // MARK: - ネットワークマネージャー
 class NetworkManager: ObservableObject {
     static let shared = NetworkManager()
     
-    // TODO: Vercelデプロイ後に実際のURLに更新してください
-    private let baseURL = "https://your-vercel-app.vercel.app/api"
+    // Vercelの実際のURLに更新
+    private let baseURL = "https://sogan-ai.vercel.app/api"
     
     private init() {}
     
@@ -151,6 +165,72 @@ class NetworkManager: ObservableObject {
     }
 }
 
+extension NetworkManager {
+    // ダイヤ残高取得
+    func fetchDiamonds(userId: UUID) async throws -> Int {
+        let url = URL(string: "\(baseURL)/diamonds?userId=\(userId.uuidString)")!
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NetworkError.invalidResponse
+        }
+        let result = try JSONDecoder().decode(DiamondResponse.self, from: data)
+        guard result.success else { throw NetworkError.apiError("ダイヤ取得失敗") }
+        return result.diamonds
+    }
+    // ダイヤ消費
+    func consumeDiamonds(userId: UUID, amount: Int) async throws -> Int {
+        let url = URL(string: "\(baseURL)/diamonds/consume")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = ["userId": userId.uuidString, "amount": amount] as [String : Any]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NetworkError.invalidResponse
+        }
+        let result = try JSONDecoder().decode(DiamondResponse.self, from: data)
+        guard result.success else { throw NetworkError.apiError("ダイヤ消費失敗") }
+        return result.diamonds
+    }
+    // ダイヤ加算
+    func addDiamonds(userId: UUID, amount: Int) async throws -> Int {
+        let url = URL(string: "\(baseURL)/diamonds/add")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = ["userId": userId.uuidString, "amount": amount] as [String : Any]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NetworkError.invalidResponse
+        }
+        let result = try JSONDecoder().decode(DiamondResponse.self, from: data)
+        guard result.success else { throw NetworkError.apiError("ダイヤ加算失敗") }
+        return result.diamonds
+    }
+
+    func fetchAIAdvice(diagnosisData: String, category: String, diamonds: Int) async throws -> AdviceData {
+        let url = URL(string: "\(baseURL)/advice")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "diagnosisData": diagnosisData,
+            "category": category,
+            "diamonds": diamonds
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw NetworkError.invalidResponse
+        }
+        let result = try JSONDecoder().decode(AIAdviceResponse.self, from: data)
+        guard result.success else { throw NetworkError.apiError("AIアドバイス生成に失敗しました") }
+        return result.advice
+    }
+}
+
 // MARK: - ネットワークエラー
 enum NetworkError: Error, LocalizedError {
     case invalidImageData
@@ -224,7 +304,7 @@ class AdviceService: ObservableObject {
         }
         
         do {
-            let result = try await networkManager.generateAdvice(
+            let result = try await networkManager.fetchAIAdvice(
                 diagnosisData: diagnosisData,
                 category: category,
                 diamonds: diamonds

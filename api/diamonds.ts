@@ -86,7 +86,7 @@ function refillDailyDiamonds(userId: string): boolean {
   const hoursSinceLastRefill = (now.getTime() - lastRefill.getTime()) / (1000 * 60 * 60);
   
   if (hoursSinceLastRefill >= 24) {
-    const refillAmount = 3; // 1日3ダイヤ補填
+    const refillAmount = 15; // 1日15ダイヤ補填
     user.diamonds += refillAmount;
     user.lastRefill = now.toISOString();
     user.purchaseHistory.push({

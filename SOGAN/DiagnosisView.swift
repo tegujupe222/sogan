@@ -138,7 +138,15 @@ struct DiagnosisView: View {
         }
         .sheet(isPresented: $showingResult) {
             if let result = diagnosisResult {
-                DiagnosisResultView(result: result)
+                DiagnosisResultView(
+                    result: result,
+                    onRetakeWithCamera: {
+                        showingCamera = true
+                    },
+                    onRetakeWithPhoto: {
+                        showingImagePicker = true
+                    }
+                )
             }
         }
         .onAppear {
@@ -231,6 +239,7 @@ struct DiagnosisView: View {
 struct CurrentUserBanner: View {
     let user: User
     let onTap: () -> Void
+    @StateObject private var dataManager = DataManager.shared
     
     var body: some View {
         Button(action: onTap) {
@@ -254,21 +263,25 @@ struct CurrentUserBanner: View {
                                 .foregroundColor(.orange)
                         )
                 }
-                
                 VStack(alignment: .leading, spacing: 2) {
                     Text(user.name)
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
-                    
                     if let nickname = user.nickname {
                         Text(nickname)
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(.secondary)
                     }
                 }
-                
                 Spacer()
-                
+                // ダイヤ数表示
+                HStack(spacing: 4) {
+                    Text("💎")
+                        .font(.system(size: 18, weight: .bold))
+                    Text("\(dataManager.getDiamonds(for: user.id))")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(.blue)
+                }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.orange)
@@ -541,7 +554,6 @@ struct DiagnosisStartCard: View {
                             .repeatForever(autoreverses: true),
                         value: isAnimating
                     )
-                
                 Image(systemName: "camera.circle.fill")
                     .font(.system(size: 60))
                     .foregroundStyle(
@@ -552,73 +564,17 @@ struct DiagnosisStartCard: View {
                         )
                     )
             }
-            
             // テキスト
             VStack(spacing: 12) {
                 Text("診断を開始")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
-                
                 Text("カメラで自撮りして顔相を診断しましょう")
                     .font(.system(size: 16, weight: .medium, design: .rounded))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
-            
-            // ダイヤモンド情報カード
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "diamond.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.blue)
-                    
-                    Text("診断に必要なダイヤモンド")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    if let userId = dataManager.selectedUserId {
-                        HStack(spacing: 4) {
-                            Text("💎")
-                                .font(.system(size: 16, weight: .bold))
-                            Text("\(dataManager.getDiamonds(for: userId))")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-                                .foregroundColor(.blue)
-                        }
-                    }
-                }
-                
-                HStack {
-                    Text("1回の診断で3ダイヤモンドを消費します")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                    
-                    Button("購入") {
-                        showingDiamondPurchase = true
-                    }
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Color.blue)
-                    .cornerRadius(12)
-                }
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.blue.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                    )
-            )
-            .padding(.horizontal, 20)
-            
             // アクションボタン
             VStack(spacing: 16) {
                 // カメラボタン
@@ -635,10 +591,7 @@ struct DiagnosisStartCard: View {
                             .font(.system(size: 18, weight: .semibold))
                         Text("カメラで撮影")
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        
                         Spacer()
-                        
-                        // ダイヤモンド消費表示
                         HStack(spacing: 4) {
                             Text("💎")
                                 .font(.system(size: 14, weight: .bold))
@@ -652,8 +605,7 @@ struct DiagnosisStartCard: View {
                         .cornerRadius(8)
                     }
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
+                    .frame(maxWidth: .infinity, minHeight: 56)
                     .background(
                         LinearGradient(
                             colors: [.orange, .pink],
@@ -664,7 +616,6 @@ struct DiagnosisStartCard: View {
                     .cornerRadius(28)
                     .shadow(color: .orange.opacity(0.3), radius: 10, x: 0, y: 5)
                 }
-                
                 // 写真選択ボタン
                 Button(action: {
                     if let userId = dataManager.selectedUserId,
@@ -679,10 +630,7 @@ struct DiagnosisStartCard: View {
                             .font(.system(size: 18, weight: .semibold))
                         Text("写真を選択")
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        
                         Spacer()
-                        
-                        // ダイヤモンド消費表示
                         HStack(spacing: 4) {
                             Text("💎")
                                 .font(.system(size: 14, weight: .bold))
@@ -696,8 +644,7 @@ struct DiagnosisStartCard: View {
                         .cornerRadius(8)
                     }
                     .foregroundColor(.orange)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
+                    .frame(maxWidth: .infinity, minHeight: 56)
                     .background(
                         RoundedRectangle(cornerRadius: 28)
                             .fill(Color.orange.opacity(0.1))
@@ -708,6 +655,24 @@ struct DiagnosisStartCard: View {
                     )
                 }
             }
+            .padding(.horizontal, 24) // ここで2ボタンの左右余白を完全統一
+            // 下部にダイヤ追加購入ボタン
+            Button(action: { showingDiamondPurchase = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.blue)
+                    Text("ダイヤを追加購入")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundColor(.blue)
+                }
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(Color.blue.opacity(0.08))
+                .cornerRadius(16)
+            }
+            .padding(.horizontal, 32)
+            .padding(.top, 8)
         }
         .padding(30)
         .padding(.horizontal, 10)

@@ -79,7 +79,7 @@ struct DiamondPurchaseView: View {
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(.blue)
                 } else {
-                    Text("💎 0")
+                    Text("💎 15") // 初期ダイヤ数を表示
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(.blue)
                 }

@@ -62,7 +62,7 @@ struct UserProfile: Codable {
         self.favoriteFaceType = nil
         self.streakDays = 0
         self.lastDiagnosisDate = nil
-        self.diamonds = 10 // 初期ダイヤモンド数
+        self.diamonds = 15 // 初期ダイヤモンド数を15個に
     }
 }
 

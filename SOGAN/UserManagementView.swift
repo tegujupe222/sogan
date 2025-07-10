@@ -66,8 +66,11 @@ struct UserManagementView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        if let userId = dataManager.selectedUserId,
-                           dataManager.getDiamonds(for: userId) >= 3 {
+                        if dataManager.users.isEmpty {
+                            // 最初のユーザーはダイヤ消費せず追加
+                            showingAddUser = true
+                        } else if let userId = dataManager.selectedUserId,
+                                  dataManager.getDiamonds(for: userId) >= 3 {
                             dataManager.consumeDiamonds(3, for: userId)
                             showingAddUser = true
                         } else {

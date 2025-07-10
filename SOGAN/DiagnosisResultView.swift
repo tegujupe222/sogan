@@ -9,6 +9,8 @@ import SwiftUI
 
 struct DiagnosisResultView: View {
     let result: FaceReadingResult
+    var onRetakeWithCamera: (() -> Void)? = nil
+    var onRetakeWithPhoto: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var showingShareSheet = false
     @State private var animateContent = false
@@ -91,6 +93,36 @@ struct DiagnosisResultView: View {
                             .opacity(animateContent ? 1.0 : 0.0)
                             .offset(y: animateContent ? 0 : 20)
                             .animation(.easeOut(duration: 0.6).delay(0.7), value: animateContent)
+                        // --- ここから再撮影ボタン ---
+                        HStack(spacing: 16) {
+                            Button(action: {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    onRetakeWithCamera?()
+                                }
+                            }) {
+                                Label("カメラで再撮影", systemImage: "camera.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            
+                            Button(action: {
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    onRetakeWithPhoto?()
+                                }
+                            }) {
+                                Label("写真を選択", systemImage: "photo.fill")
+                                    .font(.headline)
+                                    .frame(maxWidth: .infinity, minHeight: 48)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
+                        // --- ここまで再撮影ボタン ---
                     }
                     .padding(.horizontal, 20)
                     .padding(.bottom, 30)

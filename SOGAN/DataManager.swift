@@ -254,7 +254,7 @@ class DataManager: ObservableObject {
         if let profile = getUserProfile(for: userId) {
             return profile.diamonds
         }
-        return 10 // デフォルト値
+        return 15 // デフォルト値を15に修正
     }
     
     func consumeDiamonds(_ amount: Int, for userId: UUID) {
