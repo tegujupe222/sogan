@@ -1,33 +1,15 @@
 // 仮想的なデータベース（実際の実装ではVercel KVやPostgreSQLを使用）
-interface UserDiamonds {
-  [userId: string]: {
-    diamonds: number;
-    lastRefill: string;
-    purchaseHistory: PurchaseRecord[];
-  };
-}
-
-interface PurchaseRecord {
-  id: string;
-  amount: number;
-  price: number;
-  timestamp: string;
-  type: 'purchase' | 'refill' | 'consumption';
-  description: string;
-}
-
-// メモリ内ストレージ（本番環境ではデータベースを使用）
-let userDiamonds: UserDiamonds = {};
+let userDiamonds = {};
 
 // CORSヘッダーを設定する関数
-function setCorsHeaders(res: any) {
+function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
 // ユーザーのダイヤモンド情報を取得
-function getUserDiamonds(userId: string) {
+function getUserDiamonds(userId) {
   if (!userDiamonds[userId]) {
     userDiamonds[userId] = {
       diamonds: 10, // 初期ダイヤモンド数
@@ -39,7 +21,7 @@ function getUserDiamonds(userId: string) {
 }
 
 // ダイヤモンドを消費
-function consumeDiamonds(userId: string, amount: number, description: string): boolean {
+function consumeDiamonds(userId, amount, description) {
   const user = getUserDiamonds(userId);
   
   if (user.diamonds < amount) {
@@ -60,7 +42,7 @@ function consumeDiamonds(userId: string, amount: number, description: string): b
 }
 
 // ダイヤモンドを購入
-function purchaseDiamonds(userId: string, amount: number, price: number): boolean {
+function purchaseDiamonds(userId, amount, price) {
   const user = getUserDiamonds(userId);
   
   user.diamonds += amount;
@@ -77,7 +59,7 @@ function purchaseDiamonds(userId: string, amount: number, price: number): boolea
 }
 
 // 日次ダイヤモンド補填
-function refillDailyDiamonds(userId: string): boolean {
+function refillDailyDiamonds(userId) {
   const user = getUserDiamonds(userId);
   const now = new Date();
   const lastRefill = new Date(user.lastRefill);
@@ -86,25 +68,31 @@ function refillDailyDiamonds(userId: string): boolean {
   const hoursSinceLastRefill = (now.getTime() - lastRefill.getTime()) / (1000 * 60 * 60);
   
   if (hoursSinceLastRefill >= 24) {
-    const refillAmount = 15; // 1日15ダイヤ補填
-    user.diamonds += refillAmount;
-    user.lastRefill = now.toISOString();
-    user.purchaseHistory.push({
-      id: Date.now().toString(),
-      amount: refillAmount,
-      price: 0,
-      timestamp: now.toISOString(),
-      type: 'refill',
-      description: '日次ダイヤモンド補填'
-    });
-    return true;
+    const refillAmount = 10; // 1日10ダイヤ補填（最大10個）
+    const maxDiamonds = 10;
+    const currentDiamonds = user.diamonds;
+    const actualRefill = Math.min(refillAmount, maxDiamonds - currentDiamonds);
+    
+    if (actualRefill > 0) {
+      user.diamonds += actualRefill;
+      user.lastRefill = now.toISOString();
+      user.purchaseHistory.push({
+        id: Date.now().toString(),
+        amount: actualRefill,
+        price: 0,
+        timestamp: now.toISOString(),
+        type: 'refill',
+        description: '日次ダイヤモンド補填'
+      });
+      return true;
+    }
   }
   
   return false;
 }
 
 // APIハンドラー
-export default async function handler(req: any, res: any) {
+export default function handler(req, res) {
   // CORSヘッダーを設定
   setCorsHeaders(res);
 
