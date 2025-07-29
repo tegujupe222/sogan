@@ -6,7 +6,7 @@ class DiamondManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     
-    private let baseURL = "https://sogan.vercel.app" // Vercelの実際のURLに更新してください
+    private let baseURL = "https://sogan.vercel.app" // Vercelの実際のURL
     
     enum DiamondAction: Int, CaseIterable {
         case camera = 3
@@ -60,7 +60,7 @@ class DiamondManager: ObservableObject {
             return
         }
         
-        let url = URL(string: "\(baseURL)/api/diamonds")!
+        let url = URL(string: "\(baseURL)/api/diamonds-new")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -123,7 +123,7 @@ class DiamondManager: ObservableObject {
             return false
         }
         
-        let url = URL(string: "\(baseURL)/api/diamonds")!
+        let url = URL(string: "\(baseURL)/api/diamonds-new")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
